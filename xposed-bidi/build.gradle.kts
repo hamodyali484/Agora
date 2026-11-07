@@ -1,6 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.android)
 }
 
 android {
@@ -39,6 +39,7 @@ dependencies {
     compileOnly("io.github.libxposed:api:101.0.1")
     // Compile-only: TextStyle/TextDirection for the Compose hook; the classes come from
     // the target app at runtime. BOM version tracks the app's own Compose.
+    // (No Compose compiler plugin: this module has no @Composable code, plain Kotlin suffices.)
     compileOnly(platform("androidx.compose:compose-bom:${libs.versions.composeBom.get()}"))
     compileOnly("androidx.compose.ui:ui-text-android")
 }
