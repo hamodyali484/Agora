@@ -23,3 +23,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Agora"
 include(":app")
+include(":xposed-bidi")

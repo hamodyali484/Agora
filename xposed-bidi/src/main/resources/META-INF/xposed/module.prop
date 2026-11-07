@@ -1,0 +1,7 @@
+# libxposed module metadata (Java properties format).
+minApiVersion=101
+targetApiVersion=101
+# Scoped to Agora only; the manager must not offer any other app.
+staticScope=true
+# Never let a hook failure crash Agora.
+exceptionMode=protective

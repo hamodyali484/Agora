@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- No launcher activity on purpose: the module is configured from the LSPosed manager. -->
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:description="@string/module_description"
+        android:supportsRtl="true">
+
+        <!-- Legacy Xposed metadata (kept next to META-INF/xposed/* for old frameworks). -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="@string/module_description" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="101" />
+        <meta-data
+            android:name="xposedscope"
+            android:value="com.newoether.agora" />
+    </application>
+</manifest>
