@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
@@ -34,12 +33,8 @@ android {
 }
 
 dependencies {
-    // API stubs are compile-only (provided by the framework inside hooked processes).
+    // libxposed API stubs are compile-only (provided by the framework inside hooked processes).
     // Pinned to 101: api 102 needs compileSdk 37, this project builds against 36.
+    compileOnly("androidx.annotation:annotation:1.9.1")
     compileOnly("io.github.libxposed:api:101.0.1")
-    // Compile-only: TextStyle/TextDirection for the Compose hook; the classes come from
-    // the target app at runtime. BOM version tracks the app's own Compose.
-    // (No Compose compiler plugin: this module has no @Composable code, plain Kotlin suffices.)
-    compileOnly(platform("androidx.compose:compose-bom:${libs.versions.composeBom.get()}"))
-    compileOnly("androidx.compose.ui:ui-text-android")
 }

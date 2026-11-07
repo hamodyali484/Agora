@@ -8,10 +8,10 @@ paragraph per the Unicode Bidirectional Algorithm instead of the locale default.
 
 Agora renders messages with Jetpack Compose Markdown
 (`app/.../ui/chat/message/MessageItemMarkdown.kt`,
-`app/.../ui/chat/message/MessageBubbleAssets.kt`). The markdown `TextStyle`s
-carry no explicit `textDirection`, so Compose falls back to the device locale
-and RTL segments inside LTR paragraphs misalign (punctuation jumps sides,
-Arabic inside English markdown renders backwards).
+`app/.../ui/chat/message/MessageBubbleAssets.kt`). Compose lays that text out
+through the framework stack (`StaticLayout.Builder` for multi-line text,
+`BoringLayout` for single-line text), so hooking the framework layer covers
+the Compose path too.
 
 This module fixes it at runtime without touching Agora's source.
 
@@ -23,11 +23,6 @@ This module fixes it at runtime without touching Agora's source.
   with it; `build()` re-applies it. Explicit `LTR`/`RTL` forces are never
   touched, so phone/number/password fields keep working.
 - `android.text.BoringLayout.make()` — same replacement for single-line labels.
-- Compose `AndroidParagraphIntrinsics` constructors (both the current
-  `androidx.compose.ui.text` package and the older `...ui.text.platform` one) —
-  a `TextStyle` with `Unspecified`/`Content` direction is rewritten to
-  `ContentOrLtr` (first-strong per paragraph, LTR fallback). Explicit styles
-  stay untouched.
 
 No characters are inserted, so link/spoiler/selection offsets stay valid.
 

@@ -37,17 +37,15 @@ Agora's source. Implemented in `:xposed-bidi` (see `xposed-bidi/README.md`).
 1. New Gradle module `:xposed-bidi` depending on
    `io.github.libxposed:api:101.0.1` (compile-only; 101 because the project
    builds against `compileSdk 36`, and api 102 needs 37).
-2. Hook targets:
+2. Hook targets (framework text stack — covers Compose too, since
+   `AndroidParagraph` lays out through `StaticLayout.Builder`/`BoringLayout`
+   internally):
    - `android.text.StaticLayout$Builder` / `DynamicLayout$Builder` —
      `obtain()` binds `FIRSTSTRONG_LTR`; `setTextDirection()` replaces
      `FIRSTSTRONG_*` / `ANYRTL_LTR` / `LOCALE` with it; `build()` re-applies
      it. Explicit `LTR`/`RTL` forces are never touched.
    - `android.text.BoringLayout.make()` — same replacement for single-line
      text (titles, cells, hints).
-   - Compose path: `AndroidParagraphIntrinsics` constructors (both
-     `androidx.compose.ui.text` and legacy `...ui.text.platform` packages) —
-     rewrite `TextStyle.textDirection` `Unspecified`/`Content` to
-     `ContentOrLtr` (first-strong per paragraph, LTR fallback).
 3. Scoped to `com.newoether.agora` only (`scope.list`, `staticScope=true`,
    manifest `xposedscope`, plus a runtime package check in `Entry`).
 
@@ -58,20 +56,21 @@ Agora's source. Implemented in `:xposed-bidi` (see `xposed-bidi/README.md`).
   `module.prop`, `scope.list`) + manifest metadata (`xposedmodule`,
   `xposedscope`, `xposedminversion`).
 - Hook implementation for `android.text.Layout` direction resolution
-  (`BidiHooks.kt`: builders + BoringLayout + Compose intrinsics).
+  (`BidiHooks.java`: builders + BoringLayout).
 - README: install via LSPosed, enable scope, verify with mixed
   Arabic+English sample text (`xposed-bidi/README.md`).
 
 ### Risks / open questions
 
-- Compose text uses its own layout pipeline (`AndroidParagraph`), so hooking
-  `android.text.Layout` alone may be insufficient — covered by also hooking
-  the `AndroidParagraphIntrinsics` constructors, which is where Compose
-  resolves `TextStyle.textDirection` into the framework heuristic.
-- The intrinsics classes are `internal` and R8-renamed in release builds, so
-  the hook locates them by package + constructor signature (both known
-  package variants tried); verify against the shipped Compose BOM
-  (`2026.05.01`) with a logcat check (`adb logcat -s AgoraBidiFix`).
+- Compose text uses its own layout pipeline (`AndroidParagraph`), which
+  resolves direction from `TextStyle.textDirection` before reaching the
+  framework stack. The markdown typography sets no explicit direction, so the
+  framework-level `FIRSTSTRONG_LTR` still decides per paragraph — but verify
+  with logcat (`adb logcat -s AgoraBidiFix`) on the shipped Compose BOM
+  (`2026.05.01`). If Compose ever bypasses the framework stack, the fallback
+  is hooking the `AndroidParagraphIntrinsics` constructors (internal,
+  R8-renamed — locate by signature, both `androidx.compose.ui.text` and
+  legacy `...ui.text.platform` packages).
 - Alternative without root: fix in-app (below) — simpler, no LSPosed needed.
   Recommend evaluating this first.
 
