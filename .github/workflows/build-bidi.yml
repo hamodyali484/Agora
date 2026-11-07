@@ -1,0 +1,82 @@
+name: Build xposed-bidi module APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag. Leave empty to auto-tag as bidi-v1.0.<run_number> (never collides).'
+        required: false
+        default: ''
+
+# One build at a time; a newer dispatch supersedes a queued one.
+concurrency:
+  group: build-bidi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create the GitHub Release below
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+
+      - name: Resolve release tag
+        id: tag
+        run: |
+          tag='${{ inputs.release_tag }}'
+          if [ -z "$tag" ]; then tag="bidi-v1.0.${{ github.run_number }}"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Releasing as $tag"
+
+      # Release is signed with the debug key (see xposed-bidi/build.gradle.kts):
+      # the module carries no secrets, so no keystore secrets are needed.
+      - name: Build xposed-bidi release APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :xposed-bidi:assembleRelease --no-daemon --stacktrace
+
+      - name: Stage module APK
+        run: |
+          mkdir -p dist
+          src=$(find xposed-bidi/build/outputs/apk/release -name '*.apk' -print -quit)
+          [ -n "$src" ] || { echo "no module APK produced"; exit 1; }
+          cp "$src" "dist/agora-bidi-fix-${{ steps.tag.outputs.tag }}.apk"
+          ls -l dist/
+
+      # No Actions artifacts: the APK stays on the release page below, which is
+      # the single place a build is downloaded from.
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Agora Bidi Fix ${{ steps.tag.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            **Agora Bidi Fix** — LSPosed module (`com.newoether.agora.bidi`).
+
+            - Install in LSPosed/Vector, scope to **Agora** (`com.newoether.agora`) only.
+            - See `xposed-bidi/README.md` for install + verify steps.
+          files: dist/*.apk
+
+      # Releases must never accumulate: newest 5 per-run bidi tags stay.
+      - name: Prune old releases
+        if: ${{ success() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/prune-releases.sh '^bidi-v1\.0\.[0-9]+$' 5
