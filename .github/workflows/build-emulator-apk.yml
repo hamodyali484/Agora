@@ -1,0 +1,56 @@
+name: build-emulator-apk
+
+# x86_64 debug APK for the redroid emulator. The debug build type narrows
+# abiFilters to x86_64 (app/build.gradle.kts), so this is the only build that
+# produces an emulator-installable APK. Never delivered to a phone.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools ndk;28.2.13676358"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build x86_64 debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:assembleFdroidDebug --no-daemon --max-workers=2 --stacktrace
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK=$(find app/build/outputs/apk/fdroid/debug -name '*.apk' -print -quit)
+          test -n "$APK"
+          unzip -l "$APK" | grep -q 'lib/x86_64/'
+          TAG="debug-v1.0.${{ github.run_number }}"
+          NOTES="Agora emulator build (x86_64, fdroidDebug) from ${{ github.sha }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+          else
+            gh release create "$TAG" "$APK" --title "Agora emulator $TAG" --notes "$NOTES"
+          fi
+
+      - name: Prune old emulator releases
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/prune-releases.sh '^debug-v1\.0\.[0-9]+$' 5
