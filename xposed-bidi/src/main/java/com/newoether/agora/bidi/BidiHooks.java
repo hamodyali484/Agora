@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.libxposed.api.XposedInterface;
 import io.github.libxposed.api.XposedInterface.ExceptionMode;
@@ -63,6 +64,7 @@ public final class BidiHooks {
         hookBuilder(classLoader, "android.text.StaticLayout$Builder");
         hookBuilder(classLoader, "android.text.DynamicLayout$Builder");
         hookBoringLayout(classLoader);
+        hookAndroidBidi(classLoader);
         installed = !HOOKED.isEmpty();
         Log.i(TAG, "installed=" + installed + " hooks=" + HOOKED);
     }
@@ -197,6 +199,96 @@ public final class BidiHooks {
     private static boolean isExplicitForce(TextDirectionHeuristic heuristic) {
         return heuristic == TextDirectionHeuristics.LTR
                 || heuristic == TextDirectionHeuristics.RTL;
+    }
+
+    /**
+     * Keeps a symbol glued to a Latin word on the Latin side inside an RTL paragraph
+     * ({@code @ag-ui/claude-agent-sdk.} instead of {@code .ag-ui/claude-agent-sdk@}).
+     *
+     * <p>{@code android.text.AndroidBidi} is a hidden framework class; its exact signature is
+     * logged on the first layout so the device log proves what was hooked (or that nothing
+     * was). The hook only mutates the level array after {@code chain.proceed()}; it never
+     * touches the characters and never changes the return value.
+     */
+    private static void hookAndroidBidi(ClassLoader classLoader) {
+        try {
+            final Class<?> bidiClass = Class.forName("android.text.AndroidBidi", false, classLoader);
+            Method target = null;
+            final StringBuilder signatures = new StringBuilder();
+            for (Method m : bidiClass.getDeclaredMethods()) {
+                signatures.append("\n  ").append(signatureOf(m));
+                if (target == null
+                        && Modifier.isStatic(m.getModifiers())
+                        && "bidi".equals(m.getName())
+                        && m.getReturnType() == int.class) {
+                    final Class<?>[] params = m.getParameterTypes();
+                    if (params.length == 3 && params[0] == int.class
+                            && params[1] == char[].class && params[2] == byte[].class) {
+                        target = m;
+                    }
+                }
+            }
+            if (target == null) {
+                Log.w(TAG, "AndroidBidi.bidi not found; methods:" + signatures);
+                return;
+            }
+            hook(target, "androidBidi", chain -> {
+                final Object result = chain.proceed();
+                final Object charsArg = chain.getArg(1);
+                final Object levelsArg = chain.getArg(2);
+                if (charsArg instanceof char[] && levelsArg instanceof byte[]) {
+                    final int fixed = BidiLevelFixer.fix((char[]) charsArg, (byte[]) levelsArg);
+                    noteBidiCall(fixed, (char[]) charsArg);
+                }
+                return result;
+            });
+            Log.i(TAG, "hooked " + signatureOf(target));
+        } catch (Throwable t) {
+            // The class or method may not exist on this platform; the rest keeps working.
+            Log.w(TAG, "AndroidBidi hook skipped: " + t);
+        }
+    }
+
+    private static String signatureOf(Method method) {
+        final StringBuilder sb = new StringBuilder(method.getName()).append('(');
+        final Class<?>[] params = method.getParameterTypes();
+        for (int i = 0; i < params.length; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(params[i].getSimpleName());
+        }
+        return sb.append(")->").append(method.getReturnType().getSimpleName()).toString();
+    }
+
+    private static final int BIDI_DIAGNOSTIC_AT = 300;
+    private static final AtomicInteger bidiCalls = new AtomicInteger();
+    private static final AtomicInteger bidiFixes = new AtomicInteger();
+    private static int levelLogs;
+
+    /**
+     * A hook that installs but never fixes looks exactly like a hook that never runs, so after
+     * {@value #BIDI_DIAGNOSTIC_AT} calls the module states which of the two it is: zero fixes
+     * means either no glued symbol has been laid out yet, or this platform analyses through
+     * {@code AndroidBidi.directions(...)} / {@code MeasuredParagraph} instead.
+     */
+    private static void noteBidiCall(int fixed, char[] chars) {
+        final int calls = bidiCalls.incrementAndGet();
+        if (fixed > 0) {
+            bidiFixes.addAndGet(fixed);
+            if (levelLogs < 20) {
+                levelLogs++;
+                Log.d(TAG, "levels fixed=" + fixed + " text=«"
+                        + new String(chars, 0, Math.min(chars.length, 48)) + "»");
+            }
+        }
+        if (calls == BIDI_DIAGNOSTIC_AT) {
+            final int fixes = bidiFixes.get();
+            Log.i(TAG, "bidi called " + calls + " times, levels fixed " + fixes
+                    + (fixes == 0
+                    ? ": no glued symbol so far, or the render path uses directions(...)"
+                    : ""));
+        }
     }
 
     private static <T extends Executable> void hook(
