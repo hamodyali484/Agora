@@ -36,6 +36,9 @@ jobs:
         with:
           gradle-home-cache-cleanup: true
 
+      - name: BidiLevelFixer tests (JVM)
+        run: ./xposed-bidi/test-harness/run.sh
+
       - name: Resolve release tag
         id: tag
         run: |

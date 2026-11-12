@@ -23,8 +23,14 @@ This module fixes it at runtime without touching Agora's source.
   with it; `build()` re-applies it. Explicit `LTR`/`RTL` forces are never
   touched, so phone/number/password fields keep working.
 - `android.text.BoringLayout.make()` — same replacement for single-line labels.
+- `android.text.AndroidBidi.bidi(int, char[], byte[])` — after Android computes the levels,
+  the symbols glued to a Latin token (`@ag-ui/claude-agent-sdk.`, `./run.sh`, `--help`,
+  `https://example.com/a/`) are raised to the token's LTR level, so they stay on the token's
+  own side instead of jumping to the paragraph edge (`.ag-ui/claude-agent-sdk@`). Leading and
+  trailing symbols are both handled; brackets, quotes and explicit directional marks are never
+  touched.
 
-No characters are inserted, so link/spoiler/selection offsets stay valid.
+No characters are inserted, so link/selection offsets stay valid.
 
 ## Install
 
