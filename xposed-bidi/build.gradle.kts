@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
 }
@@ -5,7 +7,7 @@ plugins {
 // Same key source as :app: local.properties carries the signing keys (CI writes them from
 // repository secrets). Without them the build falls back to the debug key, which changes on
 // every runner — so a build signed that way cannot be installed over a previous one.
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("local.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.reader())
