@@ -28,6 +28,27 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Fixed signing key: without it every runner generates a fresh debug key and the module
+      # cannot be installed over a previous build.
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::KEYSTORE_B64 secret missing"
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$GITHUB_WORKSPACE/xposed-bidi/release.jks"
+          {
+            echo "storeFile=$GITHUB_WORKSPACE/xposed-bidi/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } >> local.properties
+
       - uses: android-actions/setup-android@v4
         with:
           packages: "platform-tools"
@@ -47,8 +68,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Releasing as $tag"
 
-      # Release is signed with the debug key (see xposed-bidi/build.gradle.kts):
-      # the module carries no secrets, so no keystore secrets are needed.
+      # Signed with the fixed key restored above, so a new build installs over the previous one.
       - name: Build xposed-bidi release APK
         run: |
           chmod +x ./gradlew
@@ -61,6 +81,11 @@ jobs:
           [ -n "$src" ] || { echo "no module APK produced"; exit 1; }
           cp "$src" "dist/agora-bidi-fix-${{ steps.tag.outputs.tag }}.apk"
           ls -l dist/
+
+      - name: Verify signing certificate
+        run: |
+          APK="dist/agora-bidi-fix-${{ steps.tag.outputs.tag }}.apk"
+          keytool -printcert -jarfile "$APK" | grep -E "Owner:|SHA256:" || true
 
       # No Actions artifacts: the APK stays on the release page below, which is
       # the single place a build is downloaded from.
