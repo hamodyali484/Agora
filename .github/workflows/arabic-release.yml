@@ -1,0 +1,111 @@
+name: Arabic release APK
+
+# Our own arm64 release build: signed with the dedicated Arabic keystore and
+# published as a GitHub Release asset (not a workflow artifact).
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (default: arabic-<run number>)"
+        required: false
+  push:
+    tags:
+      - "arabic-*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: arabic-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build arm64 release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools ndk;28.2.13676358"
+
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "KEYSTORE_BASE64 secret is missing; the APK would fall back to debug signing." >&2
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "${{ github.workspace }}/release.jks"
+          cat >> local.properties <<EOF
+          storeFile=${{ github.workspace }}/release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Fetch the prebuilt sherpa-onnx AAR
+        run: |
+          mkdir -p app/libs
+          curl -fL --retry 3 -o app/libs/sherpa-onnx-static-link-onnxruntime-2.0.3.aar \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.3/sherpa-onnx-static-link-onnxruntime-2.0.3.aar
+          echo "7744a3a8f08f017d59c2d8ed8d9b700345561f5abe9f4e06dc6eaef3a0b977b4  app/libs/sherpa-onnx-static-link-onnxruntime-2.0.3.aar" | sha256sum -c -
+
+      - name: Build PRoot runtime
+        run: |
+          chmod +x ./build-proot.sh
+          ./build-proot.sh
+
+      - name: Build F-Droid release APK (arm64-v8a only)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleFdroidRelease --no-daemon
+
+      - name: Verify the APK is arm64-v8a only and signed with our key
+        run: |
+          apk_path=$(find app/build/outputs/apk/fdroid/release -name '*.apk' -print -quit)
+          test -n "$apk_path"
+          entries=$(unzip -Z1 "$apk_path")
+          echo "$entries" | grep -q '^lib/arm64-v8a/' || { echo "No arm64-v8a libraries in the APK" >&2; exit 1; }
+          foreign=$(echo "$entries" | grep '^lib/' | grep -v '^lib/arm64-v8a/' || true)
+          if [ -n "$foreign" ]; then
+            echo "APK contains non-arm64 libraries:" >&2
+            echo "$foreign" >&2
+            exit 1
+          fi
+          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$apksigner" verify --print-certs "$apk_path" | head -5
+          ls -l "$apk_path"
+
+      - name: Publish GitHub Release with the APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          version=$(grep -m1 'versionName = ' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
+          tag="${INPUT_TAG:-arabic-${GITHUB_RUN_NUMBER}}"
+          apk_path=$(find app/build/outputs/apk/fdroid/release -name '*.apk' -print -quit)
+          apk_name="Agora-arabic-${version}-${tag}-arm64-v8a.apk"
+          cp "$apk_path" "$apk_name"
+          base=$(cat ARABIC_BASE 2>/dev/null || echo unknown)
+          notes=$(printf 'Agora Arabic build.\n\n- version: %s\n- ABI: arm64-v8a\n- flavor: fdroid, signed with the Arabic release key\n- our commit: %s\n- rebased on upstream commit: %s\n' \
+            "$version" "$GITHUB_SHA" "$base")
+          gh release create "$tag" "$apk_name" \
+            --title "Agora Arabic ${version} (${tag})" \
+            --notes "$notes" \
+            --target "$GITHUB_SHA"
