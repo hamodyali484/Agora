@@ -22,7 +22,13 @@ set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
 set(GGML_CPU_ALL_VARIANTS ON CACHE BOOL "" FORCE)
-set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
+# KleidiAI kernels are AArch64-only; forcing them on for x86_64 (test/emulator builds) breaks
+# the ggml-cpu-x64 pack kernels with undeclared kai_* symbols.
+if(ANDROID_ABI STREQUAL "arm64-v8a")
+    set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
+else()
+    set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
+endif()
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 
