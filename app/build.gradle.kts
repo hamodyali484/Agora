@@ -14,6 +14,10 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(keystorePropertiesFile.reader())
 }
 
+// CI enables ABI splits so the same release variant also produces an x86_64 APK that can be
+// exercised on an emulator/redroid. Local builds and normal releases stay a single arm64-v8a APK.
+val abiSplitsEnabled = providers.gradleProperty("agoraAbiSplits").orNull.toBoolean()
+
 android {
     namespace = "com.newoether.agora"
     testOptions.unitTests.isIncludeAndroidResources = true
@@ -40,8 +44,10 @@ android {
         versionName = "2.3.1"
 
 
-        ndk {
-            abiFilters += listOf("arm64-v8a")
+        if (!abiSplitsEnabled) {
+            ndk {
+                abiFilters += listOf("arm64-v8a")
+            }
         }
 
         externalNativeBuild {
@@ -50,6 +56,15 @@ android {
                 arguments += listOf("-DANDROID_STL=c++_shared")
                 targets += listOf("agora_llama", "agora_proot")
             }
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = abiSplitsEnabled
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = false
         }
     }
 
@@ -69,9 +84,12 @@ android {
         debug {
             applicationIdSuffix = ".screenshots"
             versionNameSuffix = "-screenshots"
-            ndk {
-                abiFilters.clear()
-                abiFilters += "x86_64"
+            // ABI splits and explicit abiFilters cannot coexist, so only filter when splits are off.
+            if (!abiSplitsEnabled) {
+                ndk {
+                    abiFilters.clear()
+                    abiFilters += "x86_64"
+                }
             }
         }
         release {

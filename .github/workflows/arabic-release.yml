@@ -71,14 +71,14 @@ jobs:
           chmod +x ./build-proot.sh
           ./build-proot.sh
 
-      - name: Build F-Droid release APK (arm64-v8a only)
+      - name: Build F-Droid release APKs (arm64-v8a for release, x86_64 for device testing)
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleFdroidRelease --no-daemon
+          ./gradlew assembleFdroidRelease -PagoraAbiSplits=true --no-daemon
 
-      - name: Verify the APK is arm64-v8a only and signed with our key
+      - name: Verify the arm64 APK is arm64-v8a only and signed with our key
         run: |
-          apk_path=$(find app/build/outputs/apk/fdroid/release -name '*.apk' -print -quit)
+          apk_path=$(find app/build/outputs/apk/fdroid/release -name '*-arm64-v8a.apk' -print -quit)
           test -n "$apk_path"
           entries=$(unzip -Z1 "$apk_path")
           echo "$entries" | grep -q '^lib/arm64-v8a/' || { echo "No arm64-v8a libraries in the APK" >&2; exit 1; }
@@ -99,13 +99,17 @@ jobs:
         run: |
           version=$(grep -m1 'versionName = ' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
           tag="${INPUT_TAG:-arabic-${GITHUB_RUN_NUMBER}}"
-          apk_path=$(find app/build/outputs/apk/fdroid/release -name '*.apk' -print -quit)
+          apk_path=$(find app/build/outputs/apk/fdroid/release -name '*-arm64-v8a.apk' -print -quit)
+          x86_path=$(find app/build/outputs/apk/fdroid/release -name '*-x86_64.apk' -print -quit)
           apk_name="Agora-arabic-${version}-${tag}-arm64-v8a.apk"
+          x86_name="Agora-arabic-${version}-${tag}-x86_64-test.apk"
           cp "$apk_path" "$apk_name"
+          test -n "$x86_path"
+          cp "$x86_path" "$x86_name"
           base=$(cat ARABIC_BASE 2>/dev/null || echo unknown)
-          notes=$(printf 'Agora Arabic build.\n\n- version: %s\n- ABI: arm64-v8a\n- flavor: fdroid, signed with the Arabic release key\n- our commit: %s\n- rebased on upstream commit: %s\n' \
+          notes=$(printf 'Agora Arabic build.\n\n- version: %s\n- ABI: arm64-v8a (phone), x86_64 (emulator/redroid test build)\n- flavor: fdroid, signed with the Arabic release key\n- our commit: %s\n- rebased on upstream commit: %s\n' \
             "$version" "$GITHUB_SHA" "$base")
-          gh release create "$tag" "$apk_name" \
+          gh release create "$tag" "$apk_name" "$x86_name" \
             --title "Agora Arabic ${version} (${tag})" \
             --notes "$notes" \
             --target "$GITHUB_SHA"
