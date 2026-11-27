@@ -52,6 +52,7 @@ import com.newoether.agora.model.AttachmentMeta
 import com.newoether.agora.ui.common.LocalAgoraHaptics
 import com.newoether.agora.ui.common.LocalSnackbarMessage
 import com.newoether.agora.util.AttachmentSourceReader
+import com.newoether.agora.util.rememberContentTextDirection
 import com.newoether.agora.util.Constants
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -197,7 +198,9 @@ fun AttachmentThumbnailItem(
             if (showFileName && fileName != null) {
                 Text(
                     text = fileName,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        textDirection = rememberContentTextDirection(fileName),
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -242,7 +245,7 @@ fun AttachmentThumbnailItem(
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp).then(clickMod)) {
                 FileThumbnail(fileName = fileName, isPdf = false, modifier = Modifier.size(64.dp), shape = shape)
                 if (showFileName && fileName != null) {
-                    Text(fileName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                    Text(fileName, style = MaterialTheme.typography.labelSmall.copy(textDirection = rememberContentTextDirection(fileName)), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 }
             }
         }
@@ -253,7 +256,7 @@ fun AttachmentThumbnailItem(
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp)) {
                 FileThumbnail(fileName = null, isPdf = true, modifier = Modifier.size(64.dp).then(clickMod), shape = shape)
                 if (showFileName && fileName != null) {
-                    Text(fileName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                    Text(fileName, style = MaterialTheme.typography.labelSmall.copy(textDirection = rememberContentTextDirection(fileName)), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                 }
             }
         }
@@ -329,7 +332,7 @@ fun AttachmentThumbnailItem(
                         Text(ext, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     }
                     if (showFileName && fileName != null) {
-                        Text(fileName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
+                        Text(fileName, style = MaterialTheme.typography.labelSmall.copy(textDirection = rememberContentTextDirection(fileName)), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                     }
                 }
             }
